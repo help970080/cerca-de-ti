@@ -1,0 +1,94 @@
+================================================
+  CERCA DE TI - FIX COMPLETO
+================================================
+
+Este paquete corrige TODOS los archivos que pudieron quedar
+corruptos por Notepad y hace el push a GitHub automaticamente.
+
+================================================
+  PASO 1: Descomprimir
+================================================
+
+Descomprime "fix-completo.zip" donde quieras.
+Te quedara una carpeta llamada "fix-completo".
+
+================================================
+  PASO 2: Mover la carpeta
+================================================
+
+Mueve TODA la carpeta "fix-completo" DENTRO de tu carpeta
+del proyecto "cerca-de-ti".
+
+Resultado: tu carpeta del proyecto debe verse asi:
+
+   cerca-de-ti\
+      .github\
+      .git\
+      app\
+      backend\
+      docs\
+      fix-completo\          <-- aqui debe quedar
+         aplicar-fix.bat
+         app\...
+         LEEME.txt
+      build.gradle.kts
+      settings.gradle.kts
+      ...
+
+================================================
+  PASO 3: Ejecutar el script
+================================================
+
+Entra a la carpeta del proyecto (cerca-de-ti), NO entres
+a la carpeta fix-completo.
+
+Haz DOBLE CLICK en el archivo:
+
+   fix-completo\aplicar-fix.bat
+
+Aparecera una ventana negra (CMD) que automaticamente:
+
+  1. Copia los 6 archivos corregidos sobre los existentes
+  2. Hace git add, commit y push a GitHub
+
+NO necesitas escribir nada. Solo espera a que termine.
+
+================================================
+  PASO 4: Verificar
+================================================
+
+Ve en tu navegador a:
+   https://github.com/help970080/cerca-de-ti/actions
+
+Veras una build nueva corriendo (circulo amarillo).
+Espera ~5-8 minutos.
+
+Si se pone verde: descarga el artifact CercaDeTi-debug-apk
+e instala la APK en tu celular.
+
+Si se pone roja: copia el log y mandalo en el chat.
+
+================================================
+  SI EL SCRIPT NO FUNCIONA
+================================================
+
+Tambien puedes copiar los archivos manualmente, uno por uno.
+Estan en:
+
+   fix-completo\app\src\main\AndroidManifest.xml
+   fix-completo\app\src\main\java\uk\legaxia\cercadeti\ui\MainActivity.kt
+   fix-completo\app\src\main\java\uk\legaxia\cercadeti\ui\PermisosActivity.kt
+   fix-completo\app\src\main\res\layout\activity_main.xml
+   fix-completo\app\src\main\res\layout\activity_onboarding.xml
+   fix-completo\app\src\main\res\values\strings.xml
+
+Las rutas en tu proyecto son las MISMAS pero sin "fix-completo\"
+al inicio.
+
+Despues haz manualmente desde CMD:
+
+   git add .
+   git commit -m "Fix completo"
+   git push
+
+================================================
