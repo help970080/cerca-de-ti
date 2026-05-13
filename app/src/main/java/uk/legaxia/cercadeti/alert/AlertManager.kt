@@ -16,24 +16,21 @@ import uk.legaxia.cercadeti.service.SensorWindow
  *
  * Reglas de escalado:
  * - LOW: nada
- * - MEDIUM: notificación silenciosa al usuario (pre-aviso)
- * - HIGH: cuenta atrás de 30s; si no se cancela → enviar alerta
- * - CRITICAL: cuenta atrás de 10s; si no se cancela → enviar alerta
+ * - MEDIUM: notificación silenciosa (pre-aviso, autocierra a 5s)
+ * - HIGH: cuenta atrás de 30s
+ * - CRITICAL: cuenta atrás de 10s
  *
- * Estado compartido entre instancias (GuardianService que inicia, CountdownActivity
- * que confirma o cancela) vía companion object.
+ * Anti-spam ajustado: solo durante una alerta EN CURSO se ignoran nuevos eventos.
+ * Cuando el usuario cancela, el anti-spam se libera inmediatamente para que
+ * pueda volver a probar o disparar de nuevo.
  */
 class AlertManager(private val context: Context) {
 
     fun procesarRiesgo(score: RiskScore, ventana: SensorWindow) {
-        val ahora = System.currentTimeMillis()
-
-        // Anti-spam: no apilar alertas
-        alertaActiva?.let { activa ->
-            if (ahora - activa.iniciadaMs < ANTI_SPAM_MS) {
-                Log.d(TAG, "Alerta ya en curso (hace ${ahora - activa.iniciadaMs}ms); se ignora")
-                return
-            }
+        // Anti-spam: solo bloquea si hay una alerta ACTIVA (no cancelada/confirmada)
+        if (alertaActiva != null) {
+            Log.d(TAG, "Hay alerta en curso; se ignora nuevo evento ${score.level}")
+            return
         }
 
         when (score.level) {
@@ -52,6 +49,7 @@ class AlertManager(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
+            .setTimeoutAfter(5_000)  // ← se cierra sola a los 5s
             .build()
 
         try {
@@ -70,7 +68,8 @@ class AlertManager(private val context: Context) {
             segundosCuentaAtras = segundos
         )
 
-        Log.w(TAG, "Iniciando cuenta atrás de ${segundos}s para alerta ${score.level}")
+        Log.w(TAG, "Iniciando cuenta atrás de ${segundos}s para alerta ${score.level} (total=${score.total})")
+        Log.w(TAG, "Contribuciones: ${score.contribuciones.joinToString { "${it.codigo}+${it.puntos}" }}")
 
         val intent = Intent(context, CountdownActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -83,16 +82,21 @@ class AlertManager(private val context: Context) {
 
     /** Llamado por CountdownActivity cuando el usuario cancela. */
     fun cancelarAlerta() {
-        Log.i(TAG, "Alerta cancelada por el usuario")
+        Log.i(TAG, "Alerta cancelada por el usuario; anti-spam liberado")
         alertaActiva = null
+        // Limpiar notificaciones colgadas
+        try {
+            NotificationManagerCompat.from(context).cancel(CercaApp.NOTIF_ID_ALERTA)
+        } catch (e: Exception) { /* ignore */ }
     }
 
     /** Llamado por CountdownActivity cuando expira la cuenta atrás. */
     fun confirmarAlerta() {
         val alerta = alertaActiva ?: return
-        Log.w(TAG, "Confirmando alerta: ejecutando envío y guardado de evidencia")
+        Log.w(TAG, "Confirmando alerta: envío y guardado de evidencia")
 
         val audioPcm = audioProvider?.invoke() ?: ShortArray(0)
+        Log.i(TAG, "Audio capturado: ${audioPcm.size} samples (~${audioPcm.size / 16000}s)")
 
         val packer = EvidencePacker(context)
         val paquete = packer.empaquetar(alerta.score, alerta.ventana, audioPcm)
@@ -101,7 +105,7 @@ class AlertManager(private val context: Context) {
         relay.enviarAlerta(paquete)
 
         notificarEnvio()
-        alertaActiva = null
+        alertaActiva = null  // ← liberar anti-spam también al confirmar
     }
 
     private fun notificarEnvio() {
@@ -111,6 +115,7 @@ class AlertManager(private val context: Context) {
             .setContentText(context.getString(R.string.alerta_enviada_texto))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setTimeoutAfter(10_000)  // ← se cierra sola a los 10s
             .build()
 
         try {
@@ -132,15 +137,11 @@ class AlertManager(private val context: Context) {
         private const val TAG = "AlertManager"
         private const val COUNTDOWN_HIGH_SECONDS = 30
         private const val COUNTDOWN_CRITICAL_SECONDS = 10
-        private const val ANTI_SPAM_MS = 60_000L
 
-        /**
-         * Proveedor estático del audio del ring buffer. GuardianService lo configura
-         * al iniciar AudioMonitor; AlertManager.confirmarAlerta() lo lee.
-         */
+        /** Audio del ring buffer; GuardianService lo configura. */
         @Volatile var audioProvider: (() -> ShortArray)? = null
 
-        /** Estado de la alerta en curso, compartido entre instancias. */
+        /** Alerta en curso, compartida entre instancias. */
         @Volatile internal var alertaActiva: AlertaEnCurso? = null
     }
 }

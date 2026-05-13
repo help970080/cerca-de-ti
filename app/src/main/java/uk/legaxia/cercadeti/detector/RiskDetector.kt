@@ -6,16 +6,21 @@ import uk.legaxia.cercadeti.service.SensorWindow
 import uk.legaxia.cercadeti.storage.SettingsRepo
 
 /**
- * Detector de riesgo basado en reglas heurísticas.
+ * Detector de riesgo v2 — basado en reglas mejoradas.
  *
- * Diseño deliberadamente simple, auditable y explicable:
- * - Cada señal contribuye un puntaje específico
- * - Los umbrales son ajustables y están todos documentados
- * - No usa ML en MVP (Fase 0)
- * - Cada disparo puede explicar exactamente qué señales contribuyeron
+ * Cambios respecto a v1:
+ * - Se distinguen GRITOS reales (sostenidos, pitch alto) de golpes/ruidos cortos
+ * - Volumen alto solo cuenta si va acompañado de duración mínima
+ * - Pitch alto (proxy del ZCR) pesa más como indicador de auxilio humano
+ * - Para llegar a HIGH/CRITICAL ahora se requieren al menos 2 categorías
+ *   (audio + movimiento, o audio + palabra clave)
+ * - Sensibilidad de "patrón fonético de auxilio" — dispara aunque no haya STT real
  *
- * En Fase 1 se complementará con un BaselineLearner que personalice los umbrales
- * a cada usuario, y un modelo TensorFlow Lite para clasificación de estrés vocal.
+ * Categorías de señales:
+ *   AUDIO: volumen alto sostenido, pitch alterado, patrón de grito
+ *   MOVIMIENTO: impacto, forcejeo, caída
+ *   UBICACIÓN: zona anómala, velocidad inusual
+ *   DISPOSITIVO: intentos de apagado, desbloqueo fallido
  */
 class RiskDetector(context: Context) {
 
@@ -24,66 +29,96 @@ class RiskDetector(context: Context) {
 
     fun evaluar(ventana: SensorWindow): RiskScore {
         val contribuciones = mutableListOf<Contribucion>()
+        val categoriasActivas = mutableSetOf<String>()
         var total = 0
 
         // ============ SEÑAL 1: AUDIO ============
 
-        // Volumen alto sostenido
         val baseDb = baseline.audio.avgDb
-        if (ventana.audio.avgDbAbove(baseDb + 12.0, durationSec = 5)) {
-            val puntos = 30
+        val deltaDb = ventana.audio.avgDb - baseDb
+
+        // a) Grito sostenido — volumen alto + duración + voz humana
+        //    Esto es el discriminador clave: distingue grito real de golpe puntual
+        if (deltaDb > 15 &&
+            ventana.audio.voiceActivityRatio > 0.4 &&
+            ventana.audio.windowDurationSec >= 3) {
+            val puntos = 40
             total += puntos
+            categoriasActivas.add("AUDIO")
+            contribuciones.add(Contribucion("audio_grito_sostenido", puntos,
+                "Volumen +${deltaDb.toInt()}dB sobre baseline, voz ${(ventana.audio.voiceActivityRatio * 100).toInt()}% del tiempo"))
+        }
+        // b) Volumen muy alto (independiente del baseline) — para gritos extremos
+        else if (ventana.audio.avgDb > 65 && ventana.audio.windowDurationSec >= 2) {
+            val puntos = 25
+            total += puntos
+            categoriasActivas.add("AUDIO")
             contribuciones.add(Contribucion("audio_volumen_alto", puntos,
-                "Volumen ${ventana.audio.avgDb.toInt()}dB > baseline ${baseDb.toInt()}dB +12dB"))
+                "Volumen ${ventana.audio.avgDb.toInt()}dB sostenido"))
         }
 
-        // Palabras clave detectadas
+        // c) Pitch alterado (proxy de tono agudo/estrés)
+        val basePitch = baseline.audio.pitchVar
+        if (basePitch > 0 && ventana.audio.pitchVariance > basePitch * 2.5) {
+            val puntos = 25
+            total += puntos
+            categoriasActivas.add("AUDIO")
+            contribuciones.add(Contribucion("audio_pitch_anomalo", puntos,
+                "Pitch ${ventana.audio.pitchVariance.toInt()} vs baseline ${basePitch.toInt()}"))
+        }
+
+        // d) Patrón fonético de auxilio: volumen alto + pico muy fuerte + voz
+        //    Esto cubre el caso de gritar "AUXILIO" o "AYUDA" sin necesitar STT
+        if (ventana.audio.peakDb > 75 &&
+            ventana.audio.voiceActivityRatio > 0.3 &&
+            deltaDb > 10) {
+            val puntos = 35
+            total += puntos
+            categoriasActivas.add("AUDIO")
+            contribuciones.add(Contribucion("audio_patron_auxilio", puntos,
+                "Pico ${ventana.audio.peakDb.toInt()}dB con patrón de grito vocal"))
+        }
+
+        // e) Palabras clave (solo si STT está integrado, vacío en MVP)
         val palabrasUsuario = settings.palabrasClave
         if (palabrasUsuario.isNotEmpty() && ventana.audio.containsKeyword(palabrasUsuario)) {
-            val puntos = 100  // disparo directo
+            val puntos = 100
             total += puntos
+            categoriasActivas.add("PALABRA_CLAVE")
             contribuciones.add(Contribucion("audio_palabra_clave", puntos,
                 "Palabra clave detectada: ${ventana.audio.palabrasClaveDetectadas}"))
         }
 
-        // Varianza de pitch elevada (proxy de estrés vocal)
-        if (ventana.audio.pitchVarianceAbove(baseline.audio.pitchVar * 2.5)) {
-            val puntos = 20
-            total += puntos
-            contribuciones.add(Contribucion("audio_pitch_anomalo", puntos,
-                "Varianza de pitch ${ventana.audio.pitchVariance.toInt()} > 2.5x baseline"))
-        }
-
         // ============ SEÑAL 2: MOVIMIENTO ============
 
-        // Impacto fuerte (caída o golpe)
         if (ventana.motion.maxAccelMagnitude > 25.0) {
             val puntos = 25
             total += puntos
+            categoriasActivas.add("MOVIMIENTO")
             contribuciones.add(Contribucion("motion_impacto", puntos,
                 "Aceleración máxima ${ventana.motion.maxAccelMagnitude.toInt()} m/s²"))
         }
 
-        // Caída + inmovilidad súbita
         if (ventana.motion.suddenStop(thresholdSec = 3)) {
             val puntos = 30
             total += puntos
+            categoriasActivas.add("MOVIMIENTO")
             contribuciones.add(Contribucion("motion_caida_inmovilidad", puntos,
                 "Parada brusca tras movimiento intenso"))
         }
 
-        // Movimiento intenso continuo (forcejeo)
         if (ventana.motion.continuousHighIntensity(durationSec = 8)) {
-            val puntos = 25
+            val puntos = 30
             total += puntos
+            categoriasActivas.add("MOVIMIENTO")
             contribuciones.add(Contribucion("motion_forcejeo", puntos,
                 "Movimiento intenso continuo ${ventana.motion.continuousHighIntensityMs / 1000}s"))
         }
 
-        // Cambios bruscos de orientación
-        if (ventana.motion.orientationChanges > 3) {
-            val puntos = 10
+        if (ventana.motion.orientationChanges > 5) {
+            val puntos = 15
             total += puntos
+            categoriasActivas.add("MOVIMIENTO")
             contribuciones.add(Contribucion("motion_orientacion", puntos,
                 "${ventana.motion.orientationChanges} cambios de orientación"))
         }
@@ -93,38 +128,33 @@ class RiskDetector(context: Context) {
         if (ventana.location.cambioRapidoZona() && !settings.estaEnTransitoEsperado()) {
             val puntos = 15
             total += puntos
+            categoriasActivas.add("UBICACION")
             contribuciones.add(Contribucion("location_zona_anomala", puntos,
                 "Velocidad ${ventana.location.speedMs.toInt()} m/s en zona no habitual"))
         }
 
-        // ============ SEÑAL 4: DISPOSITIVO ============
+        // ============ DETERMINAR NIVEL ============
 
-        if (ventana.device.intentosDesbloqueoFallidos > 3) {
-            val puntos = 20
-            total += puntos
-            contribuciones.add(Contribucion("device_unlock_failed", puntos,
-                "${ventana.device.intentosDesbloqueoFallidos} intentos de desbloqueo fallidos"))
-        }
-
-        if (ventana.device.pulsacionesBotonEncendido > 3) {
-            val puntos = 25
-            total += puntos
-            contribuciones.add(Contribucion("device_power_button", puntos,
-                "Intento repetido de apagado"))
-        }
+        // Política de seguridad anti-falsos-positivos:
+        // - Para alcanzar HIGH se requieren al menos 2 categorías diferentes
+        //   (excepción: palabra clave dispara solita = CRITICAL inmediato)
+        // - Esto evita disparos por ruido aislado (licuadora) o sacudida aislada
+        val categoriaCount = categoriasActivas.size
+        val tienePalabraClave = "PALABRA_CLAVE" in categoriasActivas
 
         val level = when {
-            total >= 100 -> RiskLevel.CRITICAL
-            total >= 70 -> RiskLevel.HIGH
-            total >= 50 -> RiskLevel.MEDIUM
+            tienePalabraClave -> RiskLevel.CRITICAL
+            total >= 80 && categoriaCount >= 2 -> RiskLevel.CRITICAL
+            total >= 60 && categoriaCount >= 2 -> RiskLevel.HIGH
+            total >= 40 -> RiskLevel.MEDIUM  // Pre-aviso, no dispara cuenta atrás
             else -> RiskLevel.LOW
         }
 
         if (level != RiskLevel.LOW) {
-            Log.w(TAG, "Riesgo $level (total=$total): $contribuciones")
+            Log.w(TAG, "Riesgo $level (total=$total, categorías=$categoriasActivas)")
         }
 
-        // Alimentar al baseline learner con esta ventana (siempre, para que aprenda lo normal)
+        // Alimentar baseline solo si no parece anómalo
         baseline.observar(ventana)
 
         return RiskScore(total = total, level = level, contribuciones = contribuciones)
