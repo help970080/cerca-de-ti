@@ -84,6 +84,11 @@
             android:name=".ui.HistoryActivity"
             android:exported="false" />
 
+        <!-- Diagnóstico de permisos -->
+        <activity
+            android:name=".ui.PermisosActivity"
+            android:exported="false" />
+
         <!-- Servicio guardián principal -->
         <service
             android:name=".service.GuardianService"
