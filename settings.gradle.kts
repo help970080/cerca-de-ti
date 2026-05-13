@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Vosk artifact location
+        maven { url = uri("https://alphacephei.com/maven/") }
     }
 }
 

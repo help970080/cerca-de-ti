@@ -89,6 +89,11 @@
             android:name=".ui.PermisosActivity"
             android:exported="false" />
 
+        <!-- Descarga del modelo de voz Vosk -->
+        <activity
+            android:name=".ui.DescargaModeloActivity"
+            android:exported="false" />
+
         <!-- Servicio guardián principal -->
         <service
             android:name=".service.GuardianService"

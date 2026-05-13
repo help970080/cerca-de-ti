@@ -11,10 +11,15 @@ android {
         applicationId = "uk.legaxia.cercadeti"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Filtrar ABIs para reducir tamaño del APK
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -44,6 +49,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // Vosk JNA libraries
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 }
 
@@ -67,6 +76,10 @@ dependencies {
 
     // Ubicación
     implementation("com.google.android.gms:play-services-location:21.1.0")
+
+    // Vosk STT - reconocimiento de voz on-device
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 
     // Tests
     testImplementation("junit:junit:4.13.2")

@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -17,20 +18,11 @@ import uk.legaxia.cercadeti.R
 import uk.legaxia.cercadeti.alert.AlertManager
 import uk.legaxia.cercadeti.detector.RiskDetector
 import uk.legaxia.cercadeti.detector.RiskLevel
+import uk.legaxia.cercadeti.storage.SettingsRepo
+import uk.legaxia.cercadeti.stt.KeywordSpotter
+import uk.legaxia.cercadeti.stt.VoskManager
 import uk.legaxia.cercadeti.ui.MainActivity
 
-/**
- * Servicio principal que mantiene activos los monitores y el detector.
- *
- * Corre como ForegroundService con tipos `microphone` + `location` (requerido
- * por Android 14 cuando se accede a esos sensores desde background).
- *
- * Ciclo:
- * 1. Inicia los monitores (audio, movimiento, ubicación)
- * 2. Cada 2 segundos evalúa el riesgo combinado
- * 3. Si el riesgo supera umbral, escala al AlertManager
- * 4. AlertManager decide si dispara cuenta atrás o alerta directa
- */
 class GuardianService : LifecycleService() {
 
     private lateinit var audioMonitor: AudioMonitor
@@ -38,6 +30,8 @@ class GuardianService : LifecycleService() {
     private lateinit var locationMonitor: LocationMonitor
     private lateinit var detector: RiskDetector
     private lateinit var alertManager: AlertManager
+    private lateinit var voskManager: VoskManager
+    private lateinit var settings: SettingsRepo
 
     private var detectorJob: Job? = null
 
@@ -50,13 +44,15 @@ class GuardianService : LifecycleService() {
         locationMonitor = LocationMonitor(this)
         detector = RiskDetector(this)
         alertManager = AlertManager(this)
+        voskManager = VoskManager(this)
+        settings = SettingsRepo(this)
 
         iniciarForeground()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        Log.i(TAG, "GuardianService onStartCommand")
+        Log.i(TAG, "GuardianService onStartCommand action=${intent?.action}")
 
         when (intent?.action) {
             ACTION_PAUSAR -> { pausar(); return START_STICKY }
@@ -67,15 +63,38 @@ class GuardianService : LifecycleService() {
         audioMonitor.iniciar()
         motionMonitor.iniciar()
         locationMonitor.iniciar()
-
-        // Exponer el ring buffer del audio para que AlertManager pueda volcarlo
-        // al confirmar una alerta (CountdownActivity vive en otra instancia).
         AlertManager.audioProvider = { audioMonitor.volcarBuffer() }
 
-        iniciarBucleDetector()
+        // Cargar Vosk si el modelo está en disco y hay palabras clave configuradas
+        cargarVoskSiCorresponde()
 
-        // START_STICKY: Android reinicia el servicio si lo mata el sistema
+        iniciarBucleDetector()
         return START_STICKY
+    }
+
+    private fun cargarVoskSiCorresponde() {
+        if (settings.palabrasClave.isEmpty()) {
+            Log.i(TAG, "No hay palabras clave configuradas; Vosk no se carga")
+            return
+        }
+        if (!voskManager.modeloListoEnDisco()) {
+            Log.w(TAG, "Modelo Vosk no descargado; las palabras clave no funcionarán hasta descargar")
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val ok = voskManager.descargarYCargar { _, _ -> /* ya está descargado */ }
+                if (ok) {
+                    val modelo = voskManager.modelo() ?: return@launch
+                    val spotter = KeywordSpotter(modelo, settings.palabrasClave)
+                    audioMonitor.setKeywordSpotter(spotter)
+                    Log.i(TAG, "KeywordSpotter integrado con ${settings.palabrasClave.size} palabras")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error inicializando KeywordSpotter", e)
+            }
+        }
     }
 
     private fun iniciarForeground() {
@@ -86,7 +105,6 @@ class GuardianService : LifecycleService() {
             this, 0, intentApp,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-
         val notif = NotificationCompat.Builder(this, CercaApp.CHANNEL_SERVICIO)
             .setSmallIcon(R.drawable.ic_shield)
             .setContentTitle(getString(R.string.notif_servicio_titulo))
@@ -109,9 +127,6 @@ class GuardianService : LifecycleService() {
         }
     }
 
-    /**
-     * Bucle que cada 2 segundos toma una ventana de los buffers y la evalúa.
-     */
     private fun iniciarBucleDetector() {
         detectorJob?.cancel()
         detectorJob = lifecycleScope.launch {
@@ -119,7 +134,6 @@ class GuardianService : LifecycleService() {
                 try {
                     val ventana = construirVentana()
                     val score = detector.evaluar(ventana)
-
                     if (score.level != RiskLevel.LOW) {
                         Log.w(TAG, "Riesgo detectado: ${score.level} (total=${score.total})")
                         alertManager.procesarRiesgo(score, ventana)
@@ -143,7 +157,6 @@ class GuardianService : LifecycleService() {
     }
 
     private fun pausar() {
-        Log.i(TAG, "Pausando monitores")
         audioMonitor.detener()
         motionMonitor.detener()
         locationMonitor.detener()
@@ -151,10 +164,10 @@ class GuardianService : LifecycleService() {
     }
 
     private fun reanudar() {
-        Log.i(TAG, "Reanudando monitores")
         audioMonitor.iniciar()
         motionMonitor.iniciar()
         locationMonitor.iniciar()
+        cargarVoskSiCorresponde()
         iniciarBucleDetector()
     }
 
@@ -164,13 +177,14 @@ class GuardianService : LifecycleService() {
         audioMonitor.detener()
         motionMonitor.detener()
         locationMonitor.detener()
+        voskManager.cerrar()
         AlertManager.audioProvider = null
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
-        return null  // Servicio no bindable; comunicación vía Intents
+        return null
     }
 
     companion object {

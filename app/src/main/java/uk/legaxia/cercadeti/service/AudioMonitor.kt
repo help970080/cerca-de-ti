@@ -8,21 +8,20 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import androidx.core.content.ContextCompat
+import uk.legaxia.cercadeti.stt.KeywordSpotter
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sqrt
 
 /**
- * Monitor de audio.
+ * Monitor de audio v2.
  *
- * PRINCIPIOS CRÍTICOS:
- * - El audio NUNCA se persiste en disco salvo cuando dispara una alerta.
- * - Solo se mantienen los últimos AUDIO_BUFFER_SECONDS en memoria RAM.
- * - El buffer rota: audio nuevo sobrescribe audio viejo.
- * - Si la app se cierra o pausa, el buffer se borra de RAM.
+ * Funciones:
+ * 1. Ring buffer de 60s en RAM para el snapshot del detector
+ * 2. Estadísticas rodantes (dB, ZCR) por chunks de 500ms
+ * 3. Pasa cada chunk al KeywordSpotter (si está activo) para STT
  *
- * Para el detector exponemos snapshots de estadísticas (dB promedio, pitch, etc.),
- * no audio crudo. Solo el AlertManager pide el audio crudo al disparar.
+ * El audio NUNCA se persiste en disco salvo al disparar una alerta.
  */
 class AudioMonitor(private val context: Context) {
 
@@ -37,19 +36,24 @@ class AudioMonitor(private val context: Context) {
     private var capturaThread: Thread? = null
     @Volatile private var corriendo = false
 
-    /**
-     * Ring buffer circular en RAM, 60 segundos de PCM16 a 16kHz = ~1.92 MB.
-     * Aceptable en memoria.
-     */
-    private val totalSamples = sampleRate * 60  // 60 segundos
+    /** Ring buffer circular en RAM, 60 segundos PCM16 16kHz ≈ 1.92 MB */
+    private val totalSamples = sampleRate * 60
     private val ringBuffer = ShortArray(totalSamples)
     private var writeIndex = 0
 
-    /**
-     * Estadísticas rodantes computadas por chunk de 500ms y agregadas
-     * sobre la ventana de evaluación.
-     */
+    /** Historial de stats por chunk de 500ms (últimos 120 = 60s). */
     private val statsHistory = ArrayDeque<ChunkStats>()
+
+    /** Spotter de palabras clave (puede ser null si Vosk no está listo). */
+    @Volatile private var keywordSpotter: KeywordSpotter? = null
+
+    /** Configura el KeywordSpotter desde GuardianService cuando Vosk esté listo. */
+    fun setKeywordSpotter(spotter: KeywordSpotter?) {
+        keywordSpotter?.cerrar()
+        keywordSpotter = spotter
+        if (spotter != null) Log.i(TAG, "KeywordSpotter activado")
+        else Log.i(TAG, "KeywordSpotter desactivado")
+    }
 
     fun iniciar() {
         if (corriendo) return
@@ -94,7 +98,8 @@ class AudioMonitor(private val context: Context) {
         audioRecord = null
         capturaThread?.interrupt()
         capturaThread = null
-        // Limpiar buffer al detener
+        keywordSpotter?.cerrar()
+        keywordSpotter = null
         synchronized(ringBuffer) {
             ringBuffer.fill(0)
             writeIndex = 0
@@ -112,7 +117,7 @@ class AudioMonitor(private val context: Context) {
                 continue
             }
 
-            // Copiar al ring buffer
+            // 1. Copiar al ring buffer
             synchronized(ringBuffer) {
                 for (i in 0 until leidos) {
                     ringBuffer[writeIndex] = temp[i]
@@ -120,15 +125,15 @@ class AudioMonitor(private val context: Context) {
                 }
             }
 
-            // Calcular stats del chunk y agregarlos al historial
+            // 2. Stats
             val stats = calcularStats(temp, leidos)
             synchronized(statsHistory) {
                 statsHistory.addLast(stats)
-                // Mantener máximo 120 chunks (60 segundos)
-                while (statsHistory.size > 120) {
-                    statsHistory.removeFirst()
-                }
+                while (statsHistory.size > 120) statsHistory.removeFirst()
             }
+
+            // 3. Alimentar al KeywordSpotter (en mismo thread; Vosk es muy rápido)
+            keywordSpotter?.procesarChunk(temp, leidos)
         }
     }
 
@@ -138,14 +143,13 @@ class AudioMonitor(private val context: Context) {
         for (i in 0 until length) {
             val v = samples[i].toDouble()
             sumSquares += v * v
-            val abs = abs(v)
-            if (abs > peak) peak = abs
+            val ab = abs(v)
+            if (ab > peak) peak = ab
         }
         val rms = sqrt(sumSquares / length)
         val avgDb = if (rms > 0) 20.0 * log10(rms / 32768.0) + 90.0 else 0.0
         val peakDb = if (peak > 0) 20.0 * log10(peak / 32768.0) + 90.0 else 0.0
 
-        // Pitch variance estimado de forma simple por zero-crossing rate
         var zeroCrossings = 0
         var prev = samples[0].toInt()
         for (i in 1 until length) {
@@ -163,10 +167,6 @@ class AudioMonitor(private val context: Context) {
         )
     }
 
-    /**
-     * Snapshot agregado para el detector.
-     * Toma estadísticas de los últimos 60 segundos.
-     */
     fun snapshot(): AudioSnapshot {
         val historial = synchronized(statsHistory) { statsHistory.toList() }
         if (historial.isEmpty()) {
@@ -179,29 +179,23 @@ class AudioMonitor(private val context: Context) {
 
         val avgDb = historial.map { it.avgDb }.average()
         val peakDb = historial.maxOf { it.peakDb }
-
-        // Varianza del ZCR como proxy de varianza de pitch
         val zcrMean = historial.map { it.zeroCrossingRate }.average()
         val zcrVar = historial.map { (it.zeroCrossingRate - zcrMean).let { d -> d * d } }.average()
-
-        // VAD simple: chunk con avgDb > umbral cuenta como voz
         val voicedChunks = historial.count { it.avgDb > VAD_DB_THRESHOLD }
         val vadRatio = voicedChunks.toDouble() / historial.size
+
+        val palabras = keywordSpotter?.obtenerPalabrasRecientes() ?: emptyList()
 
         return AudioSnapshot(
             avgDb = avgDb,
             peakDb = peakDb,
-            pitchVariance = zcrVar * 1000.0,  // escalado para legibilidad
+            pitchVariance = zcrVar * 1000.0,
             voiceActivityRatio = vadRatio,
-            palabrasClaveDetectadas = emptyList(),  // TODO: integrar KeywordSpotter en Fase 1
+            palabrasClaveDetectadas = palabras,
             windowDurationSec = (historial.size * 0.5).toInt()
         )
     }
 
-    /**
-     * Vuelca el contenido actual del ring buffer a un array PCM lineal.
-     * Llamar SOLO cuando AlertManager confirma una alerta.
-     */
     fun volcarBuffer(): ShortArray {
         synchronized(ringBuffer) {
             val resultado = ShortArray(totalSamples)
@@ -222,6 +216,6 @@ class AudioMonitor(private val context: Context) {
 
     companion object {
         private const val TAG = "AudioMonitor"
-        private const val VAD_DB_THRESHOLD = 45.0  // dB para considerar que hay voz
+        private const val VAD_DB_THRESHOLD = 45.0
     }
 }
