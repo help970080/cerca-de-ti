@@ -1,0 +1,24 @@
+{
+  "name": "cerca-de-ti-relay",
+  "version": "0.1.0",
+  "description": "Backend relay para Cerca de Ti — enruta alertas a contactos. No almacena evidencia.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-fetch": "^3.3.2"
+  },
+  "license": "MIT",
+  "author": "Leonardo Luna Mendoza",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/help970080/cerca-de-ti"
+  }
+}

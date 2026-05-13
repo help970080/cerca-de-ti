@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cerca de Ti</string>
+
+    <!-- Notificaciones del servicio -->
+    <string name="notif_servicio_titulo">Cerca de Ti está cuidándote</string>
+    <string name="notif_servicio_texto">Monitoreo activo en segundo plano</string>
+
+    <!-- Alertas -->
+    <string name="alerta_preaviso_titulo">Cerca de Ti notó algo</string>
+    <string name="alerta_preaviso_texto">Si todo está bien, ignora este aviso. Si necesitas ayuda, no canceles la próxima alerta.</string>
+    <string name="alerta_enviada_titulo">Alerta enviada</string>
+    <string name="alerta_enviada_texto">Tus contactos de confianza fueron notificados con tu ubicación.</string>
+
+    <!-- Cuenta atrás -->
+    <string name="countdown_titulo">¿Estás bien?</string>
+    <string name="countdown_subtitulo">Se enviará alerta a tus contactos si no cancelas</string>
+    <string name="countdown_nivel">Nivel: %1$s</string>
+    <string name="countdown_cancelar">ESTOY BIEN — CANCELAR</string>
+
+    <!-- Pantalla principal -->
+    <string name="estado_activo">✓ Activo. Cerca de Ti está cuidándote.</string>
+    <string name="estado_inactivo">○ Inactivo. Toca el botón para activar.</string>
+    <string name="boton_activar">Activar Cerca de Ti</string>
+    <string name="boton_desactivar">Desactivar</string>
+    <string name="boton_contactos">Contactos de confianza</string>
+    <string name="boton_historial">Historial de alertas</string>
+    <string name="permisos_requeridos">Cerca de Ti necesita los permisos para funcionar. Concédelos en Ajustes.</string>
+
+    <!-- Onboarding -->
+    <string name="onb_bienvenida_titulo">Cerca de Ti</string>
+    <string name="onb_bienvenida_texto">Tu celular puede detectar cuando estás en peligro y avisar a quien tú elijas. Sin botones, sin que tengas que hacer nada en el momento.\n\nEsto es un proyecto sin fines de lucro, gratuito y sin publicidad. Todo lo que escucha tu celular se queda en tu celular: solo cuando algo parece grave se manda audio y ubicación a tus contactos de confianza.\n\nNada nos llega a nosotros. Nunca.</string>
+    <string name="onb_btn_entendido">Entiendo, continuar</string>
+
+    <string name="onb_privacidad_titulo">Lo que necesitas saber</string>
+    <string name="onb_privacidad_texto">• Cerca de Ti graba sonido todo el tiempo, pero solo lo guarda 60 segundos en la memoria del teléfono. Si no pasa nada, ese audio se borra solo.\n\n• Cuando detecta algo grave, te da 30 segundos para cancelar. Si no cancelas, manda mensaje a tus contactos con tu ubicación y el audio de ese momento.\n\n• El audio se guarda cifrado en tu teléfono. Solo tú puedes verlo.\n\n• No vendemos datos, no hay anuncios, no hay servidor central con tus grabaciones.\n\n• El código es abierto: cualquiera puede revisar que esto es cierto en github.com/help970080/cerca-de-ti</string>
+    <string name="onb_btn_acepto">He leído y acepto</string>
+    <string name="onb_debe_aceptar">Debes aceptar para continuar</string>
+    <string name="chk_consent_texto">Acepto la política de privacidad y entiendo cómo funciona Cerca de Ti</string>
+
+    <string name="onb_nombre_titulo">¿Cómo te llamas?</string>
+    <string name="onb_nombre_texto">Este nombre aparecerá en el mensaje que reciben tus contactos.</string>
+    <string name="onb_nombre_hint">Tu nombre o como te conocen</string>
+    <string name="onb_nombre_vacio">Por favor escribe tu nombre</string>
+
+    <string name="onb_palabras_titulo">Palabras de auxilio</string>
+    <string name="onb_palabras_texto">Escoge una o dos palabras que NO uses normalmente y que solo dirías si estuvieras en peligro. Si Cerca de Ti las detecta en tu voz, manda alerta inmediata.\n\nSepara con comas. Ejemplos: "código rojo", "auxilio mamá", "violeta urgente".</string>
+    <string name="onb_palabras_hint">Tus palabras de auxilio (separadas por comas)</string>
+
+    <string name="onb_contactos_titulo">Contactos de confianza</string>
+    <string name="onb_contactos_texto">Ahora agrega entre 1 y 5 personas que reciban tus alertas. Pueden ser familia, amigos cercanos o tu pareja.</string>
+    <string name="onb_btn_siguiente">Siguiente</string>
+    <string name="onb_btn_configurar_contactos">Configurar mis contactos</string>
+
+    <!-- Contactos -->
+    <string name="contactos_titulo">Contactos de confianza</string>
+    <string name="contactos_subtitulo">Recibirán SMS y WhatsApp con tu ubicación cuando se dispare una alerta. Mínimo 1, máximo 5.</string>
+    <string name="contactos_agregar">Agregar contacto</string>
+    <string name="contactos_guardar">Guardar y continuar</string>
+    <string name="contactos_max_alcanzado">Máximo 5 contactos. Borra uno para agregar otro.</string>
+    <string name="contactos_min_uno">Debes tener al menos un contacto.</string>
+    <string name="contactos_guardados">Contactos guardados</string>
+    <string name="contactos_agregar_titulo">Nuevo contacto</string>
+    <string name="contactos_invalido">Nombre y teléfono (al menos 10 dígitos)</string>
+    <string name="contactos_borrar_titulo">¿Borrar contacto?</string>
+    <string name="contactos_borrar_msg">¿Quitar a %1$s de tus contactos de confianza?</string>
+
+    <!-- Historial -->
+    <string name="historial_titulo">Historial de alertas</string>
+    <string name="historial_vacio">No has tenido ninguna alerta todavía. Eso es buena señal.</string>
+    <string name="historial_detalle_titulo">Detalle de la alerta</string>
+    <string name="historial_borrar_titulo">¿Borrar esta alerta?</string>
+    <string name="historial_borrar_msg">Se eliminarán el audio, ubicación y datos asociados. No se puede deshacer.</string>
+
+    <!-- Genéricos -->
+    <string name="agregar">Agregar</string>
+    <string name="cancelar">Cancelar</string>
+    <string name="cerrar">Cerrar</string>
+    <string name="borrar">Borrar</string>
+    <string name="nombre">Nombre</string>
+    <string name="telefono">Teléfono</string>
+</resources>

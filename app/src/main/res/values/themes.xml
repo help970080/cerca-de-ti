@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.CercaDeTi" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primario</item>
+        <item name="colorPrimaryDark">@color/primario_oscuro</item>
+        <item name="colorPrimaryVariant">@color/primario_oscuro</item>
+        <item name="colorAccent">@color/acento</item>
+        <item name="colorSecondary">@color/acento</item>
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/primario_oscuro</item>
+        <item name="android:textColorPrimary">@color/texto_principal</item>
+        <item name="android:textColorSecondary">@color/texto_secundario</item>
+    </style>
+
+    <style name="Theme.CercaDeTi.Countdown" parent="Theme.CercaDeTi">
+        <item name="android:windowBackground">@color/alerta_critica</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/alerta_critica</item>
+    </style>
+
+</resources>

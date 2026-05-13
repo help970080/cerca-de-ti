@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta principal: morado profundo + verde de seguridad -->
+    <color name="primario">#5B2C8F</color>
+    <color name="primario_oscuro">#3E1D63</color>
+    <color name="primario_claro">#8B5BC5</color>
+    <color name="acento">#22A06B</color>
+    <color name="acento_oscuro">#178054</color>
+
+    <!-- Alertas -->
+    <color name="alerta_critica">#D62828</color>
+    <color name="alerta_alta">#F77F00</color>
+    <color name="alerta_media">#FCBF49</color>
+
+    <!-- Neutros -->
+    <color name="fondo">#FAFAFA</color>
+    <color name="superficie">#FFFFFF</color>
+    <color name="texto_principal">#1A1A1A</color>
+    <color name="texto_secundario">#5C5C5C</color>
+    <color name="divisor">#E0E0E0</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
