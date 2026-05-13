@@ -3,178 +3,135 @@ package uk.legaxia.cercadeti.ui
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import uk.legaxia.cercadeti.R
+import uk.legaxia.cercadeti.service.GuardianService
+import uk.legaxia.cercadeti.storage.ContactsRepo
+import uk.legaxia.cercadeti.storage.SettingsRepo
 
-/**
- * Pantalla de diagnóstico de permisos.
- *
- * Muestra el estado de cada permiso crítico y permite al usuario otorgar
- * los faltantes uno por uno. Si Android ya marcó algún permiso como
- * "no volver a preguntar", da un botón para abrir Ajustes directamente.
- */
-class PermisosActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity() {
 
-    private val solicitarPermiso = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ ->
-        renderPermisos()
+    private lateinit var settings: SettingsRepo
+    private lateinit var contactos: ContactsRepo
+
+    private val solicitarPermisos = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { resultados ->
+        val todosOtorgados = resultados.values.all { it }
+        if (todosOtorgados) {
+            arrancarServicio()
+        } else {
+            mostrarMensajePermisos()
+        }
     }
-
-    private val permisos = mutableListOf<PermisoInfo>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(android.R.layout.list_content)
+        setContentView(R.layout.activity_main)
 
-        construirListaPermisos()
-        renderPermisos()
-    }
+        settings = SettingsRepo(this)
+        contactos = ContactsRepo(this)
 
-    override fun onResume() {
-        super.onResume()
-        renderPermisos()
-    }
-
-    private fun construirListaPermisos() {
-        permisos.clear()
-        permisos.add(PermisoInfo(
-            permiso = Manifest.permission.RECORD_AUDIO,
-            nombre = "Micrófono (RECORD_AUDIO)",
-            descripcion = "Para detectar voz alterada y palabras clave"
-        ))
-        permisos.add(PermisoInfo(
-            permiso = Manifest.permission.ACCESS_FINE_LOCATION,
-            nombre = "Ubicación precisa (ACCESS_FINE_LOCATION)",
-            descripcion = "Para enviar tu posición a tus contactos al disparar alerta"
-        ))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permisos.add(PermisoInfo(
-                permiso = Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                nombre = "Ubicación en segundo plano",
-                descripcion = "Para que la detección funcione con la app cerrada"
-            ))
+        // Si no completó onboarding, redirigir
+        if (!settings.consentimientoOtorgado) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
         }
-        permisos.add(PermisoInfo(
-            permiso = Manifest.permission.SEND_SMS,
-            nombre = "Enviar SMS (SEND_SMS)",
-            descripcion = "Para avisar a tus contactos aunque no haya internet"
-        ))
+
+        val tvEstado = findViewById<TextView>(R.id.tvEstado)
+        val btnActivar = findViewById<Button>(R.id.btnActivar)
+        val btnContactos = findViewById<Button>(R.id.btnContactos)
+        val btnHistorial = findViewById<Button>(R.id.btnHistorial)
+        val btnPermisos = findViewById<Button>(R.id.btnPermisos)
+
+        actualizarEstado(tvEstado, btnActivar)
+
+        btnActivar.setOnClickListener {
+            if (settings.servicioActivado) {
+                detenerServicio()
+            } else {
+                solicitarPermisosYArrancar()
+            }
+            actualizarEstado(tvEstado, btnActivar)
+        }
+
+        btnContactos.setOnClickListener {
+            startActivity(Intent(this, ContactsActivity::class.java))
+        }
+
+        btnHistorial.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
+
+        btnPermisos.setOnClickListener {
+            startActivity(Intent(this, PermisosActivity::class.java))
+        }
+    }
+
+    private fun actualizarEstado(tvEstado: TextView, btn: Button) {
+        if (settings.servicioActivado) {
+            tvEstado.text = getString(R.string.estado_activo)
+            btn.text = getString(R.string.boton_desactivar)
+        } else {
+            tvEstado.text = getString(R.string.estado_inactivo)
+            btn.text = getString(R.string.boton_activar)
+        }
+    }
+
+    private fun solicitarPermisosYArrancar() {
+        if (contactos.obtenerContactos().isEmpty()) {
+            // No se puede activar sin al menos un contacto
+            startActivity(Intent(this, ContactsActivity::class.java))
+            return
+        }
+
+        val permisos = mutableListOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.SEND_SMS
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permisos.add(PermisoInfo(
-                permiso = Manifest.permission.POST_NOTIFICATIONS,
-                nombre = "Notificaciones (POST_NOTIFICATIONS)",
-                descripcion = "Para mostrar el estado del servicio y alertas"
-            ))
+            permisos.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val faltantes = permisos.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (faltantes.isEmpty()) {
+            arrancarServicio()
+        } else {
+            solicitarPermisos.launch(faltantes.toTypedArray())
         }
     }
 
-    private fun renderPermisos() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
+    private fun arrancarServicio() {
+        val intent = Intent(this, GuardianService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
         }
-
-        val titulo = TextView(this).apply {
-            text = "Diagnóstico de permisos"
-            textSize = 22f
-            setPadding(0, 0, 0, 16)
-        }
-        root.addView(titulo)
-
-        val subtitulo = TextView(this).apply {
-            text = "Cerca de Ti necesita estos permisos para funcionar. Toca cada uno para otorgarlo."
-            textSize = 14f
-            setPadding(0, 0, 0, 32)
-        }
-        root.addView(subtitulo)
-
-        permisos.forEach { p ->
-            val granted = ContextCompat.checkSelfPermission(this, p.permiso) ==
-                    PackageManager.PERMISSION_GRANTED
-
-            val bloque = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(16, 16, 16, 16)
-                setBackgroundColor(if (granted) 0xFFE8F5E9.toInt() else 0xFFFFEBEE.toInt())
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = 16 }
-            }
-
-            val nombre = TextView(this).apply {
-                text = "${if (granted) "✓" else "✗"} ${p.nombre}"
-                textSize = 16f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-            }
-            bloque.addView(nombre)
-
-            val desc = TextView(this).apply {
-                text = p.descripcion
-                textSize = 13f
-                setPadding(0, 4, 0, 8)
-            }
-            bloque.addView(desc)
-
-            if (!granted) {
-                val boton = Button(this).apply {
-                    text = "Otorgar permiso"
-                    setOnClickListener {
-                        val deniedPermanently = !shouldShowRequestPermissionRationale(p.permiso)
-                        if (deniedPermanently &&
-                            ContextCompat.checkSelfPermission(this@PermisosActivity, p.permiso) !=
-                            PackageManager.PERMISSION_GRANTED) {
-                            // El usuario marcó "no preguntar de nuevo" o el sistema lo ocultó
-                            abrirAjustesApp()
-                        } else {
-                            solicitarPermiso.launch(p.permiso)
-                        }
-                    }
-                }
-                bloque.addView(boton)
-            }
-
-            root.addView(bloque)
-        }
-
-        // Botón para abrir Ajustes directamente
-        val btnAjustes = Button(this).apply {
-            text = "Abrir ajustes del sistema"
-            setOnClickListener { abrirAjustesApp() }
-        }
-        root.addView(btnAjustes)
-
-        val btnVolver = Button(this).apply {
-            text = "Volver"
-            setOnClickListener { finish() }
-        }
-        root.addView(btnVolver)
-
-        setContentView(root)
+        settings.servicioActivado = true
     }
 
-    private fun abrirAjustesApp() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.parse("package:$packageName")
+    private fun detenerServicio() {
+        val intent = Intent(this, GuardianService::class.java).apply {
+            action = GuardianService.ACTION_DETENER
         }
-        startActivity(intent)
+        startService(intent)
+        settings.servicioActivado = false
     }
 
-    private data class PermisoInfo(
-        val permiso: String,
-        val nombre: String,
-        val descripcion: String
-    )
+    private fun mostrarMensajePermisos() {
+        val tvEstado = findViewById<TextView>(R.id.tvEstado)
+        tvEstado.text = getString(R.string.permisos_requeridos)
+    }
 }
