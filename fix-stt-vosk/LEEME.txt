@@ -1,0 +1,99 @@
+================================================
+  Cerca de Ti - Integracion STT con Vosk
+================================================
+
+Este fix agrega reconocimiento de voz REAL para detectar
+palabras clave personalizadas como "auxilio", "ayuda",
+"no me toques", o las que el usuario configure.
+
+================================================
+  QUE CAMBIA EN ESTA VERSION
+================================================
+
+1) Modelo Vosk small ES (39 MB) que se descarga UNA VEZ
+   desde GitHub Releases del propio repo.
+
+2) Nueva pantalla "Modelo de voz" que muestra progreso
+   de descarga. Se accede desde el menu principal.
+
+3) KeywordSpotter que procesa audio en tiempo real y
+   detecta palabras clave del usuario, normalizando
+   acentos (auxilio == auxílio).
+
+4) El detector ahora dispara CRITICAL inmediato cuando
+   detecta una palabra clave hablada.
+
+5) Build configurado para filtrar solo ABIs ARM (reduce
+   APK final).
+
+================================================
+  PASOS PARA APLICAR
+================================================
+
+PASO 1: Sube el modelo a GitHub Releases
+        (CRITICO - sin esto la app no descargara nada)
+
+        Abre SUBIR_MODELO.txt y sigue las instrucciones.
+        Tarda ~5 minutos.
+
+PASO 2: Aplica el fix de codigo
+
+        Descomprime este ZIP. Mueve la carpeta "fix-stt-vosk"
+        DENTRO de tu carpeta del proyecto cerca-de-ti.
+
+        Haz DOBLE CLICK en fix-stt-vosk\aplicar-fix.bat
+
+PASO 3: Espera la build en GitHub Actions
+
+        https://github.com/help970080/cerca-de-ti/actions
+
+        Esta vez tardara MAS (~10-15 min) porque agregamos
+        librerias nativas grandes (Vosk JNI).
+
+PASO 4: Descarga e instala la APK nueva
+
+        Sera tipo 25 MB (mas grande que antes por las libs).
+        Instala sobre la APK existente.
+
+PASO 5: Prueba
+
+        a) Abre la app
+        b) Toca "Modelo de voz"
+        c) Conectate a WiFi
+        d) Toca "Descargar" - espera ~1 min mientras baja 39 MB
+        e) Toca "Continuar"
+        f) Asegurate de tener palabras clave configuradas
+           en el onboarding (sino, configurarlas en
+           settings o reinstalar)
+        g) Activa el servicio
+        h) Di en voz normal una de tus palabras clave
+           (ejemplo: "auxilio")
+        i) Debe disparar la cuenta atras CRITICAL (10s)
+
+================================================
+  TROUBLESHOOTING
+================================================
+
+"La descarga falla"
+  -> Verifica que subiste el modelo a GitHub Releases
+     con el tag exacto: v0.2.0-model
+  -> Verifica la URL en navegador:
+     https://github.com/help970080/cerca-de-ti/releases/
+       download/v0.2.0-model/vosk-model-small-es-0.42.zip
+  -> Si la URL te da 404, no subiste bien el release.
+
+"Compila pero no detecta palabras clave"
+  -> Verifica que tengas palabras clave configuradas
+     (en onboarding o agregando manualmente)
+  -> Verifica en pantalla principal que diga
+     "Modelo de voz listo (N palabras clave)"
+  -> Reinicia el servicio (desactivar / activar)
+  -> Tira un grito sostenido para validar que el
+     detector base sigue funcionando
+
+"La APK pesa demasiado"
+  -> Es normal. ~15-25 MB es esperado por las JNI libs.
+     El modelo de 39 MB NO esta dentro del APK, se baja
+     bajo demanda.
+
+================================================

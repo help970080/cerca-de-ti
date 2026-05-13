@@ -14,11 +14,13 @@ import uk.legaxia.cercadeti.R
 import uk.legaxia.cercadeti.service.GuardianService
 import uk.legaxia.cercadeti.storage.ContactsRepo
 import uk.legaxia.cercadeti.storage.SettingsRepo
+import uk.legaxia.cercadeti.stt.VoskManager
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: SettingsRepo
     private lateinit var contactos: ContactsRepo
+    private lateinit var voskManager: VoskManager
 
     private val solicitarPermisos = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -37,8 +39,8 @@ class MainActivity : AppCompatActivity() {
 
         settings = SettingsRepo(this)
         contactos = ContactsRepo(this)
+        voskManager = VoskManager(this)
 
-        // Si no completó onboarding, redirigir
         if (!settings.consentimientoOtorgado) {
             startActivity(Intent(this, OnboardingActivity::class.java))
             finish()
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
         val btnContactos = findViewById<Button>(R.id.btnContactos)
         val btnHistorial = findViewById<Button>(R.id.btnHistorial)
         val btnPermisos = findViewById<Button>(R.id.btnPermisos)
+        val btnModeloVoz = findViewById<Button>(R.id.btnModeloVoz)
 
         actualizarEstado(tvEstado, btnActivar)
 
@@ -73,21 +76,37 @@ class MainActivity : AppCompatActivity() {
         btnPermisos.setOnClickListener {
             startActivity(Intent(this, PermisosActivity::class.java))
         }
+
+        btnModeloVoz.setOnClickListener {
+            startActivity(Intent(this, DescargaModeloActivity::class.java))
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val tvEstado = findViewById<TextView>(R.id.tvEstado)
+        val btnActivar = findViewById<Button>(R.id.btnActivar)
+        actualizarEstado(tvEstado, btnActivar)
     }
 
     private fun actualizarEstado(tvEstado: TextView, btn: Button) {
-        if (settings.servicioActivado) {
-            tvEstado.text = getString(R.string.estado_activo)
-            btn.text = getString(R.string.boton_desactivar)
+        val baseTexto = if (settings.servicioActivado) {
+            getString(R.string.estado_activo)
         } else {
-            tvEstado.text = getString(R.string.estado_inactivo)
-            btn.text = getString(R.string.boton_activar)
+            getString(R.string.estado_inactivo)
         }
+        val infoModelo = if (voskManager.modeloListoEnDisco()) {
+            "\n✓ Modelo de voz listo (${settings.palabrasClave.size} palabras clave)"
+        } else {
+            "\n⚠ Modelo de voz no descargado — toca \"Modelo de voz\""
+        }
+        tvEstado.text = baseTexto + infoModelo
+        btn.text = if (settings.servicioActivado) getString(R.string.boton_desactivar)
+                   else getString(R.string.boton_activar)
     }
 
     private fun solicitarPermisosYArrancar() {
         if (contactos.obtenerContactos().isEmpty()) {
-            // No se puede activar sin al menos un contacto
             startActivity(Intent(this, ContactsActivity::class.java))
             return
         }

@@ -26,6 +26,7 @@
     <string name="boton_contactos">Contactos de confianza</string>
     <string name="boton_historial">Historial de alertas</string>
     <string name="boton_permisos">Diagnóstico de permisos</string>
+    <string name="boton_modelo_voz">Modelo de voz</string>
     <string name="permisos_requeridos">Cerca de Ti necesita los permisos para funcionar. Concédelos en Ajustes.</string>
 
     <!-- Onboarding -->

@@ -1,0 +1,84 @@
+================================================
+  SUBIR EL MODELO DE VOZ A GITHUB RELEASES
+================================================
+
+La app descarga el modelo desde un GitHub Release del propio repo.
+Esto es gratis, sin límite de tráfico y permite actualizarlo cuando quieras.
+
+Sigue estos pasos UNA SOLA VEZ:
+
+================================================
+  PASO 1: Descarga el modelo oficial Vosk en español
+================================================
+
+Abre este link en tu navegador y descarga el ZIP:
+
+  https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+
+Son ~39 MB. Guárdalo en tu carpeta de Descargas con ese nombre exacto:
+
+  vosk-model-small-es-0.42.zip
+
+NO LO DESCOMPRIMAS. La app espera el ZIP tal cual.
+
+================================================
+  PASO 2: Crear un Release en GitHub
+================================================
+
+1) Abre en el navegador:
+   https://github.com/help970080/cerca-de-ti/releases/new
+
+2) En el campo "Choose a tag" escribe:
+   v0.2.0-model
+
+   Y luego haz click en "Create new tag: v0.2.0-model on publish".
+
+3) En "Release title" escribe:
+   Modelo de voz español v0.42
+
+4) En "Describe this release" pega esto:
+
+   Modelo Vosk small ES 0.42 - reconocimiento de voz offline para español.
+   Licencia Apache 2.0. Tamaño: ~39 MB. Fuente: alphacephei.com.
+
+5) Arrastra el archivo "vosk-model-small-es-0.42.zip" desde tu carpeta
+   Descargas a la zona que dice "Attach binaries by dropping them here".
+   Espera a que termine de subirse (puede tardar 2-5 min dependiendo
+   de tu internet).
+
+6) Asegúrate de que la opción "Set as a pre-release" NO esté marcada.
+   La opción "Set as the latest release" SÍ debe estar marcada.
+
+7) Click en "Publish release" (botón verde abajo).
+
+================================================
+  PASO 3: Verificar
+================================================
+
+Verifica que el archivo está disponible en esta URL:
+
+  https://github.com/help970080/cerca-de-ti/releases/download/v0.2.0-model/vosk-model-small-es-0.42.zip
+
+Si te abre/descarga el ZIP, está listo.
+
+Esa misma URL es la que usa la app para descargar el modelo, asi
+que despues de subirlo no necesitas tocar mas nada.
+
+================================================
+  DESPUES
+================================================
+
+Cuando los usuarios abran la app:
+1) Si ya descargaron el modelo antes, todo funciona normal.
+2) Si es primera vez o si tocan "Modelo de voz", la app:
+   - Descarga el ZIP desde tu GitHub Release
+   - Lo descomprime localmente (cifrado por permisos de Android)
+   - Carga el modelo en RAM
+   - Empieza a detectar palabras clave en tiempo real
+
+Si en el futuro quieres actualizar el modelo (Vosk v0.5+), solo:
+- Crea un nuevo tag (ej. v0.3.0-model)
+- Sube el nuevo ZIP
+- Actualiza la URL en VoskManager.kt
+
+================================================

@@ -1,0 +1,96 @@
+================================================
+  Cerca de Ti - Fix de Deteccion y SMS
+================================================
+
+QUE CAMBIA EN ESTA VERSION:
+
+1) DETECCION DE AUXILIO MEJORADA (RiskDetector)
+   - Distingue gritos sostenidos de golpes/ruidos cortos
+   - Mide pitch alterado (proxy de estres vocal)
+   - Detecta "patron fonetico de auxilio": pico alto + voz humana
+     (dispara aunque no haya STT real)
+   - Para HIGH/CRITICAL requiere 2 categorias de señales (audio + algo mas)
+     => Menos falsos positivos por ruidos sueltos
+
+2) SMS ROBUSTO (RelayClient)
+   - Normaliza numeros mexicanos correctamente (10 digitos puros o +52)
+   - Verifica permiso SMS antes de intentar enviar
+   - Logs detallados (puedes verlos con adb logcat si quieres)
+   - Mensaje sin acentos para evitar problemas de codificacion
+
+3) ANTI-SPAM CORREGIDO (AlertManager)
+   - Antes: bloqueaba 60s aunque cancelaras
+   - Ahora: solo bloquea durante una alerta EN CURSO
+   - Al cancelar o confirmar, el detector queda libre inmediatamente
+
+4) NOTIFICACIONES SE AUTOCIERRAN
+   - Pre-aviso: 5 segundos
+   - Alerta enviada: 10 segundos
+   - Ya no se quedan pegadas en la barra
+
+
+================================================
+  COMO APLICAR
+================================================
+
+PASO 1: Descomprime este ZIP donde quieras.
+        Te queda una carpeta "fix-deteccion-sms".
+
+PASO 2: Mueve TODA la carpeta "fix-deteccion-sms" DENTRO
+        de tu carpeta del proyecto "cerca-de-ti".
+
+PASO 3: Entra a cerca-de-ti/fix-deteccion-sms/ y haz
+        DOBLE CLICK en "aplicar-fix.bat".
+
+PASO 4: Espera ~5-8 minutos en GitHub Actions y descarga
+        la nueva APK debug.
+
+PASO 5: Instala SOBRE la APK existente (no desinstales)
+
+
+================================================
+  PLAN DE PRUEBAS CON LA APK NUEVA
+================================================
+
+PRUEBA 1: Permiso SMS
+  - Abre la app -> "Diagnostico de permisos"
+  - Verifica que SMS esta en VERDE
+  - Si esta rojo, otorgalo desde la app (boton "Otorgar")
+  - Si no se otorga, usa "Abrir ajustes del sistema"
+
+PRUEBA 2: Contacto correcto
+  - Toca "Contactos de confianza"
+  - Agrega un contacto con un numero DIFERENTE al tuyo
+    (importante: si pones tu propio numero, el SMS no funcionara bien)
+  - Mejor pruebalo con un familiar
+  - El numero puede ir como 5586498482 (10 digitos)
+
+PRUEBA 3: Disparar alerta (grito sostenido)
+  - Activa el servicio en pantalla principal
+  - Bloquea la pantalla del celular
+  - Grita FUERTE durante 3-5 segundos cerca del celular
+  - Debe aparecer la pantalla roja de cuenta atras
+  - NO CANCELES, espera los 30 segundos
+
+PRUEBA 4: Verificar que llego el SMS
+  - Despues de 30 seg, abre la app Mensajes del celular
+  - En "Enviados" debe aparecer un SMS al contacto que pusiste
+  - Tambien debe haber llegado a su celular
+
+PRUEBA 5: Reset despues de cancelar
+  - Vuelve a disparar (gritar)
+  - Cuando aparezca la cuenta atras, CANCELALA
+  - Inmediatamente vuelve a gritar
+  - Debe disparar de nuevo (el anti-spam viejo bloqueaba 60s)
+
+
+================================================
+  SI ALGO FALLA
+================================================
+
+Mandame screenshot/info de:
+  - Cual prueba fallo
+  - Que paso exactamente
+  - Si tienes adb: logcat filtrado por "Cerca" o "RelayClient"
+
+================================================
